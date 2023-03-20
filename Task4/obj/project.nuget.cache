@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "WKT3wTEnjVjmB3vfi2r/W89lBxPXpSkJHN03HdD8Xq11+ioNuu+Bflw7gJq9eP2RBX8NbhuzC6U914fCr5MZoQ==",
+  "success": true,
+  "projectFilePath": "C:\\Users\\Omen\\Documents\\Lb4\\Task4\\Task4.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\Omen\\.nuget\\packages\\microsoft.netcore.app.host.win-x64\\3.1.25\\microsoft.netcore.app.host.win-x64.3.1.25.nupkg.sha512"
+  ],
+  "logs": []
+}
