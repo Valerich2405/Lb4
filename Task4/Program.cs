@@ -8,6 +8,15 @@ namespace Task4
         public event EventHandler<ActionEventArgs> ActionCompleted;
         public event EventHandler WorkflowCompleted;
 
+        private enum State
+        {
+            AddAction,
+            ExecuteAction,
+            WorkflowComplete
+        }
+
+        private State currentState = State.AddAction;
+
         public void Run()
         {
             var action1 = new Action("Action 1");
@@ -18,9 +27,21 @@ namespace Task4
             AddAction(action2);
             AddAction(action3);
 
-            action1.Execute();
-            action2.Execute();
-            action3.Execute();
+            while (currentState != State.WorkflowComplete)
+            {
+                switch (currentState)
+                {
+                    case State.AddAction:
+                        currentState = State.ExecuteAction;
+                        break;
+                    case State.ExecuteAction:
+                        action1.Execute();
+                        action2.Execute();
+                        action3.Execute();
+                        currentState = State.WorkflowComplete;
+                        break;
+                }
+            }
 
             OnWorkflowCompleted();
         }
@@ -49,7 +70,7 @@ namespace Task4
 
     public class Action
     {
-        public string Name { get; private set; }
+        public string Name { get; set; }
 
         public Action(string name)
         {
@@ -65,18 +86,20 @@ namespace Task4
 
     public class ActionEventArgs : EventArgs
     {
-        public Action Action { get; private set; }
+        public Action Action { get; set; }
 
         public ActionEventArgs(Action action)
         {
             Action = action;
         }
     }
+
     class Program
     {
         static void Main(string[] args)
         {
             Console.WriteLine("Workflow started");
+            Console.WriteLine();
 
             var workflow = new Workflow();
             workflow.ActionAdded += OnActionAdded;
@@ -88,19 +111,19 @@ namespace Task4
             Console.WriteLine("Workflow ended");
         }
 
-        private static void OnActionAdded(object sender, ActionEventArgs e)
+        private static void OnActionAdded(object sender, ActionEventArgs a)
         {
-            Console.WriteLine($"Action '{e.Action.Name}' added to the workflow");
+            Console.WriteLine($"Action '{a.Action.Name}' added to the workflow");
             Console.WriteLine();
         }
 
-        private static void OnActionCompleted(object sender, ActionEventArgs e)
+        private static void OnActionCompleted(object sender, ActionEventArgs a)
         {
-            Console.WriteLine($"Action '{e.Action.Name}' completed");
+            Console.WriteLine($"Action '{a.Action.Name}' completed");
             Console.WriteLine();
         }
 
-        private static void OnWorkflowCompleted(object sender, EventArgs e)
+        private static void OnWorkflowCompleted(object sender, EventArgs a)
         {
             Console.WriteLine("Workflow completed");
             Console.WriteLine();
