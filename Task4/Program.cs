@@ -19,9 +19,9 @@ namespace Task4
 
         public void Run()
         {
-            var action1 = new Action("Action 1");
-            var action2 = new Action("Action 2");
-            var action3 = new Action("Action 3");
+            var action1 = new Action("Дiя 1");
+            var action2 = new Action("Дiя 2");
+            var action3 = new Action("Дiя 3");
 
             AddAction(action1);
             AddAction(action2);
@@ -79,8 +79,7 @@ namespace Task4
 
         public void Execute()
         {
-            Console.WriteLine($"Executing action '{Name}'...");
-            Console.WriteLine();
+            Console.WriteLine($"Виконання дiї '{Name}'...");
         }
     }
 
@@ -98,7 +97,7 @@ namespace Task4
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("Workflow started");
+            Console.WriteLine("Робочий процес розпочато");
             Console.WriteLine();
 
             var workflow = new Workflow();
@@ -108,25 +107,23 @@ namespace Task4
 
             workflow.Run();
 
-            Console.WriteLine("Workflow ended");
+            Console.WriteLine();
+            Console.WriteLine("Робочий процес завершений!");
         }
 
         private static void OnActionAdded(object sender, ActionEventArgs a)
         {
-            Console.WriteLine($"Action '{a.Action.Name}' added to the workflow");
-            Console.WriteLine();
+            Console.WriteLine($"Дiю '{a.Action.Name}' додано до робочого процесу");
         }
 
         private static void OnActionCompleted(object sender, ActionEventArgs a)
         {
-            Console.WriteLine($"Action '{a.Action.Name}' completed");
-            Console.WriteLine();
+            Console.WriteLine($"Дiю '{a.Action.Name}' завершено");
         }
 
         private static void OnWorkflowCompleted(object sender, EventArgs a)
         {
-            Console.WriteLine("Workflow completed");
-            Console.WriteLine();
+            Console.WriteLine("Робочий процес виконано");
         }
     }
 }

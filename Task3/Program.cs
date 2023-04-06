@@ -1,154 +1,130 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading;
+﻿using System.Threading;
+using System;
 
-namespace Task3
+class Warehouse
 {
-    public class EventBus
+    public delegate void DeliveryHandler(string message);
+    private DeliveryHandler notify;
+    private int currentLoad;
+    private int retryCount;
+    private int initialDelayMs;
+    private int maxDelayMs;
+    private readonly Random random;
+
+    public event DeliveryHandler Notify
     {
-        private Dictionary<string, Dictionary<int, List<Delegate>>> eventHandlers = new Dictionary<string, Dictionary<int, List<Delegate>>>();
-        private Dictionary<string, DateTime> lastEventTime = new Dictionary<string, DateTime>();
-        private readonly int maxRetries;
-        private readonly int minDelay;
-        private readonly int maxDelay;
-        private readonly double delayMultiplier;
-
-        public EventBus(int maxRetries, int minDelay, int maxDelay, double delayMultiplier)
+        add
         {
-            this.maxRetries = maxRetries;
-            this.minDelay = minDelay;
-            this.maxDelay = maxDelay;
-            this.delayMultiplier = delayMultiplier;
+            notify += value;
+            Console.WriteLine($"{value.Method.Name} додано");
         }
-
-        public void Register(string eventName, int priority, Delegate eventHandler)
+        remove
         {
-            if (!eventHandlers.ContainsKey(eventName))
-            {
-                eventHandlers[eventName] = new Dictionary<int, List<Delegate>>();
-            }
-            if (!eventHandlers[eventName].ContainsKey(priority))
-            {
-                eventHandlers[eventName][priority] = new List<Delegate>();
-            }
-            eventHandlers[eventName][priority].Add(eventHandler);
-        }
-
-        public void Unregister(string eventName, int priority, Delegate eventHandler)
-        {
-            if (eventHandlers.ContainsKey(eventName))
-            {
-                if (eventHandlers[eventName].ContainsKey(priority))
-                {
-                    eventHandlers[eventName][priority].Remove(eventHandler);
-                }
-            }
-        }
-
-        public void Send(string eventName, object sender, EventArgs args)
-        {
-            if (eventHandlers.ContainsKey(eventName))
-            {
-                DateTime minEventTime;
-                if (!lastEventTime.TryGetValue(eventName, out minEventTime) || (DateTime.Now - minEventTime).TotalMilliseconds >= GetDelay())
-                {
-                    lastEventTime[eventName] = DateTime.Now;
-                    for (int retries = 0; retries < maxRetries; retries++)
-                    {
-                        foreach (int priority in eventHandlers[eventName].Keys)
-                        {
-                            foreach (Delegate eventHandler in eventHandlers[eventName][priority])
-                            {
-                                eventHandler.DynamicInvoke(sender, args);
-                            }
-                        }
-
-                        if ((DateTime.Now - lastEventTime[eventName]).TotalMilliseconds >= GetDelay())
-                        {
-                            break;
-                        }
-                        else
-                        {
-                            Thread.Sleep(GetDelay());
-                        }
-                    }
-                }
-            }
-        }
-
-        private int GetDelay()
-        {
-            int currentDelay = minDelay;
-            if (maxDelay > minDelay)
-            {
-                Random random = new Random();
-                currentDelay = (int)(currentDelay * delayMultiplier * (1 + random.NextDouble()));
-                currentDelay = Math.Min(currentDelay, maxDelay);
-            }
-            return currentDelay;
+            notify -= value;
+            Console.WriteLine($"{value.Method.Name} видалено");
         }
     }
 
-    public class Publisher
+    public int CurrentLoad
     {
-        private EventBus eventBus;
-
-        public Publisher(EventBus eventBus)
+        get { return currentLoad; }
+        private set
         {
-            this.eventBus = eventBus;
+            currentLoad = value;
+            notify?.Invoke($"Кiлькiсть товарiв на складi змiнено i дорiвнює: {currentLoad}");
         }
+    }
 
-        public void SendEvent()
+    public Warehouse(int retryCount, int initialDelayMs, int maxDelayMs)
+    {
+        this.retryCount = retryCount;
+        this.initialDelayMs = initialDelayMs;
+        this.maxDelayMs = maxDelayMs;
+        this.random = new Random();
+    }
+
+    public void Add(int quantity)
+    {
+        if (TryAction(() =>
         {
-            for (int i = 1; i <= 10; i++)
+            if (CurrentLoad + quantity <= 50)
             {
-                if (i % 2 == 0)
+                CurrentLoad += quantity;
+            }
+            else
+            {
+                throw new InvalidOperationException($"На складi недостатньо мiсця. Не вдалося додати: {quantity}");
+            }
+        }, $"На складi недостатньо мiсця. Не вдалося додати: {quantity}"))
+        {
+            notify?.Invoke($"Додано товарiв на склад: {quantity}");
+        }
+    }
+
+    public void Remove(int quantity)
+    {
+        if (TryAction(() =>
+        {
+            if (CurrentLoad - quantity >= 0)
+            {
+                CurrentLoad -= quantity;
+            }
+            else
+            {
+                throw new InvalidOperationException($"На складi недостатньо товарiв для вiдвантаження: {quantity}");
+            }
+        }, $"На складi недостатньо товарiв для вiдвантаження: {quantity}"))
+        {
+            notify?.Invoke($"Вiдвантажено товарiв зi складу: {quantity}");
+        }
+    }
+
+    private bool TryAction(Action action, string failureMessage)
+    {
+        for (int i = 0; i < retryCount; i++)
+        {
+            try
+            {
+                action();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Помилка на спробi {i + 1} з {retryCount}: {ex.Message}");
+                if (i < retryCount - 1)
                 {
-                    eventBus.Send("EvenEvent", this, EventArgs.Empty);
+                    int delay = random.Next(initialDelayMs, maxDelayMs);
+                    Console.WriteLine($"Наступна спроба через {delay} мс");
+                    Thread.Sleep(delay);
                 }
-                else
-                {
-                    eventBus.Send("OddEvent", this, EventArgs.Empty);
-                }
-                Thread.Sleep(2000);
             }
         }
+        Console.WriteLine(failureMessage);
+        return false;
     }
-
-    public class PrioritySubscriber
-    {
-        public int Priority { get; set; }
-
-        public PrioritySubscriber(int priority)
-        {
-            Priority = priority;
-        }
-        public void HandleEvent(object sender, EventArgs args)
-        {
-            Console.WriteLine($"Priority {Priority} subscriber handling event");
-        }
-    }
-
-    class Program
-    {
-        static void Main(string[] args)
-        {
-            EventBus eventBus = new EventBus(5, 1000, 5000, 1.5);
-            Publisher publisher = new Publisher(eventBus);
-
-            PrioritySubscriber sub1 = new PrioritySubscriber(1);
-            PrioritySubscriber sub2 = new PrioritySubscriber(2);
-            PrioritySubscriber sub3 = new PrioritySubscriber(3);
-
-            eventBus.Register("OddEvent", sub1.Priority, new Action<object, EventArgs>(sub1.HandleEvent));
-            eventBus.Register("EvenEvent", sub2.Priority, new Action<object, EventArgs>(sub2.HandleEvent));
-            eventBus.Register("OddEvent", sub3.Priority, new Action<object, EventArgs>(sub3.HandleEvent));
-
-
-            publisher.SendEvent();
-
-            Console.ReadLine();
-        }
-    } 
 }
 
+class Program
+{
+    static void Main(string[] args)
+    {
+        Warehouse warehouse = new Warehouse(3, 1000, 5000);
+        warehouse.Notify += ShowMessage;
+        warehouse.Add(10);
+        warehouse.Add(20);
+        warehouse.Add(20);
+        warehouse.Add(20);
+        warehouse.Remove(5);
+        warehouse.Remove(25);
+
+        Console.ReadKey();
+    }
+    static void ShowMessage(string message)
+    {
+        if (!string.IsNullOrEmpty(message))
+        {
+            Thread.Sleep(500);
+            Console.WriteLine(message);
+        }
+    }
+}

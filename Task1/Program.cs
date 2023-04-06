@@ -1,50 +1,63 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 
 namespace Task1
 {
-    public class EventBus
+    class Warehouse
     {
-        private Dictionary<string, List<Delegate>> eventHandlers = new Dictionary<string, List<Delegate>>();
-        private Dictionary<string, DateTime> lastEventTime = new Dictionary<string, DateTime>();
-        private int throttlingTime;
+        public delegate void DeliveryHandler(string message);
+        private DeliveryHandler notify;
+        private int currentLoad;
 
-        public EventBus(int throtTime)
+        public event DeliveryHandler Notify
         {
-            throttlingTime = throtTime;
-        }
-
-        public void Register(string eventName, Delegate eventHandler)
-        {
-            if (!eventHandlers.ContainsKey(eventName))
+            add
             {
-                eventHandlers[eventName] = new List<Delegate>();
+                notify += value;
+                Console.WriteLine($"{value.Method.Name} додано");
             }
-            eventHandlers[eventName].Add(eventHandler);
-        }
-
-        public void Unregister(string eventName, Delegate eventHandler)
-        {
-            if (eventHandlers.ContainsKey(eventName))
+            remove
             {
-                eventHandlers[eventName].Remove(eventHandler);
+                notify -= value;
+                Console.WriteLine($"{value.Method.Name} видалено");
             }
         }
 
-        public void Send(string eventName, object sender, EventArgs args)
+        public int CurrentLoad
         {
-            if (eventHandlers.ContainsKey(eventName))
+            get { return currentLoad; }
+            private set
             {
-                DateTime minEventTime;
-                if (!lastEventTime.TryGetValue(eventName, out minEventTime) || (DateTime.Now - minEventTime).TotalMilliseconds >= throttlingTime)
-                {
-                    lastEventTime[eventName] = DateTime.Now;
-                    foreach (Delegate eventHandler in eventHandlers[eventName])
-                    {
-                        eventHandler.DynamicInvoke(sender, args);
-                    }
-                }
+                currentLoad = value;
+                notify?.Invoke($"Кiлькiсть товарiв на складi змiнено i дорiвнює: {currentLoad}");
+            }
+        }
+
+        public void Add(int quantity)
+        {
+            if (CurrentLoad + quantity <= 50)
+            {
+                CurrentLoad += quantity;
+                notify?.Invoke($"Додано товарiв на склад: {quantity}");
+            }
+            else
+            {
+                notify?.Invoke($"На складi недостатньо мiсця. Не вдалося додати: {quantity}");
+            }
+        }
+
+        public void Remove(int quantity)
+        {
+            if (CurrentLoad - quantity >= 0)
+            {
+                CurrentLoad -= quantity;
+                notify?.Invoke($"Вiдвантажено товарiв зi складу: {quantity}");
+            }
+            else
+            {
+                notify?.Invoke($"На складi недостатньо товарiв для вiдвантаження: {quantity}");
             }
         }
     }
@@ -53,23 +66,25 @@ namespace Task1
     {
         static void Main(string[] args)
         {
-            EventBus eventBus = new EventBus(2000);
+            Warehouse warehouse = new Warehouse();
+            warehouse.Notify += ShowMessage;
+            warehouse.Add(10);
+            warehouse.Add(20);
+            warehouse.Add(20);
+            warehouse.Add(20);
+            warehouse.Remove(5);
+            warehouse.Remove(25);
 
-            eventBus.Register("NewEvent", new EventHandler(Handler));
-
-            for (int i = 0; i < 10; i++)
-            {
-                eventBus.Send("NewEvent", null, EventArgs.Empty);
-                Thread.Sleep(1000);
-            }
-
-            eventBus.Unregister("NewEvent", new EventHandler(Handler));
+            Console.ReadKey();
         }
 
-        static void Handler(object sender, EventArgs args)
+        static void ShowMessage(string message)
         {
-            Console.WriteLine("Loading...");
+            if (!string.IsNullOrEmpty(message))
+            {
+                Thread.Sleep(500);
+                Console.WriteLine(message);
+            }
         }
     }
 }
-

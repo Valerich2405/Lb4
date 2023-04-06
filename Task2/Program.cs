@@ -4,116 +4,120 @@ using System.Threading;
 
 namespace Task2
 {
-    public class EventBus
+    public class Warehouse
     {
-        private Dictionary<string, Dictionary<int, List<Delegate>>> eventHandlers = new Dictionary<string, Dictionary<int, List<Delegate>>>();
-        private Dictionary<string, DateTime> lastEventTime = new Dictionary<string, DateTime>();
-        private int throttlingTime;
+        public delegate void DeliveryHandler(string message, Priority priority);
+        private DeliveryHandler notify;
+        private int currentLoad;
 
-        public EventBus(int throtTime)
+        public event DeliveryHandler Notify
         {
-            throttlingTime = throtTime;
-        }
-
-        public void Register(string eventName, int priority, Delegate eventHandler)
-        {
-            if (!eventHandlers.ContainsKey(eventName))
+            add
             {
-                eventHandlers[eventName] = new Dictionary<int, List<Delegate>>();
+                notify += value;
+                Console.WriteLine($"{value.Method.Name} додано");
             }
-            if (!eventHandlers[eventName].ContainsKey(priority))
+            remove
             {
-                eventHandlers[eventName][priority] = new List<Delegate>();
-            }
-            eventHandlers[eventName][priority].Add(eventHandler);
-        }
-
-        public void Unregister(string eventName, int priority, Delegate eventHandler)
-        {
-            if (eventHandlers.ContainsKey(eventName))
-            {
-                if (eventHandlers[eventName].ContainsKey(priority))
-                {
-                    eventHandlers[eventName][priority].Remove(eventHandler);
-                }
+                notify -= value;
+                Console.WriteLine($"{value.Method.Name} видалено");
             }
         }
 
-        public void Send(string eventName, object sender, EventArgs args)
+        public int CurrentLoad
         {
-            if (eventHandlers.ContainsKey(eventName))
+            get { return currentLoad; }
+            private set
             {
-                DateTime minEventTime;
-                if (!lastEventTime.TryGetValue(eventName, out minEventTime) || (DateTime.Now - minEventTime).TotalMilliseconds >= throttlingTime)
-                {
-                    lastEventTime[eventName] = DateTime.Now;
-                    foreach (int priority in eventHandlers[eventName].Keys)
-                    {
-                        foreach (Delegate eventHandler in eventHandlers[eventName][priority])
-                        {
-                            eventHandler.DynamicInvoke(sender, args);
-                        }
-                    }
-                }
+                currentLoad = value;
+                notify?.Invoke($"Кiлькiсть товарiв на складi змiнено i дорiвнює: {currentLoad}", Priority.Low);
+            }
+        }
+
+        public void Add(int quantity)
+        {
+            if (CurrentLoad + quantity <= 50)
+            {
+                CurrentLoad += quantity;
+                notify?.Invoke($"Додано товарiв на склад: {quantity}", Priority.High);
+            }
+            else
+            {
+                notify?.Invoke($"На складi недостатньо мiсця. Не вдалося додати: {quantity}", Priority.Low);
+            }
+        }
+
+        public void Remove(int quantity)
+        {
+            if (CurrentLoad - quantity >= 0)
+            {
+                CurrentLoad -= quantity;
+                notify?.Invoke($"Вiдвантажено товарiв зi складу: {quantity}", Priority.High);
+            }
+            else
+            {
+                notify?.Invoke($"На складi недостатньо товарiв для вiдвантаження: {quantity}", Priority.Low);
             }
         }
     }
 
-    public class Publisher
+    public enum Priority
     {
-        private EventBus eventBus;
+        Low,
+        High
+    }
 
-        public Publisher(EventBus eventBus)
+    public class Subscriber
+    {
+        private Priority priority;
+
+        public Subscriber(Priority priority)
         {
-            this.eventBus = eventBus;
+            this.priority = priority;
         }
 
-        public void SendEvent()
+        public void Subscribe(Warehouse warehouse)
         {
-            for (int i = 1; i <= 10; i++)
+            warehouse.Notify += ReceiveMessage;
+        }
+
+        public void Unsubscribe(Warehouse warehouse)
+        {
+            warehouse.Notify -= ReceiveMessage;
+        }
+
+        private void ReceiveMessage(string message, Priority priority)
+        {
+            if (priority == this.priority)
             {
-                if (i % 2 == 0)
-                {
-                    eventBus.Send("EvenEvent", this, EventArgs.Empty);
-                }
-                else
-                {
-                    eventBus.Send("OddEvent", this, EventArgs.Empty);
-                }
-                Thread.Sleep(2000);
+                Thread.Sleep(1000);
+                Console.WriteLine(message);
             }
         }
     }
 
-    public class PrioritySubscriber
-    {
-        public int Priority { get; set; }
-
-        public PrioritySubscriber(int priority)
-        {
-            Priority = priority;
-        }
-
-        public void HandleEvent(object sender, EventArgs args)
-        {
-            Console.WriteLine($"Priority {Priority} subscriber handling event");
-        }
-    }
     class Program
     {
         static void Main(string[] args)
         {
-            EventBus eventBus = new EventBus(2000);
-            PrioritySubscriber sub1 = new PrioritySubscriber(1);
-            PrioritySubscriber sub2 = new PrioritySubscriber(2);
-            PrioritySubscriber sub3 = new PrioritySubscriber(3);
-            PrioritySubscriber sub4 = new PrioritySubscriber(4);
-            eventBus.Register("EvenEvent", 1, new EventHandler(sub1.HandleEvent));
-            eventBus.Register("EvenEvent", 2, new EventHandler(sub2.HandleEvent));
-            eventBus.Register("OddEvent", 3, new EventHandler(sub3.HandleEvent));
-            eventBus.Register("OddEvent", 4, new EventHandler(sub4.HandleEvent));
-            Publisher publisher = new Publisher(eventBus);
-            publisher.SendEvent();
+            Warehouse warehouse = new Warehouse();
+            Subscriber lowPrioritySubscriber = new Subscriber(Priority.Low);
+            Subscriber highPrioritySubscriber = new Subscriber(Priority.High);
+
+            lowPrioritySubscriber.Subscribe(warehouse);
+            highPrioritySubscriber.Subscribe(warehouse);
+
+            warehouse.Add(10);
+            warehouse.Add(20);
+            warehouse.Add(20);
+            warehouse.Add(20);
+            warehouse.Remove(5);
+            warehouse.Remove(25);
+
+            lowPrioritySubscriber.Unsubscribe(warehouse);
+            highPrioritySubscriber.Unsubscribe(warehouse);
+
+            Console.ReadKey();
         }
     }
 }
